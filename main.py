@@ -7,6 +7,9 @@ import io
 import pandas as pd
 import plotly.express as px
 import speech_recognition as sr
+import subprocess
+subprocess.run(['apt-get', 'install', 'ffmpeg'])
+
 
 # Load pre-trained model and tokenizer
 MODEL_NAME = "bsingh/roberta_goEmotion"
