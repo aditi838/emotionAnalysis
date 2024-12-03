@@ -2,12 +2,8 @@ import streamlit as st
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 from textblob import TextBlob
-from pydub import AudioSegment
-import io
 import pandas as pd
 import plotly.express as px
-import speech_recognition as sr
-
 
 # Load pre-trained model and tokenizer
 MODEL_NAME = "bsingh/roberta_goEmotion"
@@ -41,7 +37,7 @@ def get_sentiment(text):
 st.set_page_config(page_title="Emotion Detection", layout="wide")
 
 # Sidebar menu
-page = st.sidebar.selectbox("Select Task", ["Text Analysis", "Voice Analysis"])
+page = st.sidebar.selectbox("Select Task", ["Text Analysis"])
 
 # Function to display results with an interactive chart
 def display_results(user_input, emotion, probabilities, sentiment):
@@ -90,42 +86,3 @@ if page == "Text Analysis":
             display_results(combined_text, emotion, probabilities, sentiment)
         else:
             st.warning("Please enter some text.")
-
-# Task 2: Voice Analysis
-elif page == "Voice Analysis":
-    st.title("Voice Emotion Analysis")
-
-    # Option: Audio File Upload
-    uploaded_audio = st.file_uploader("Upload an audio file (e.g., .wav, .mp3)", type=["wav", "mp3"])
-    if uploaded_audio:
-        with st.spinner("Processing the uploaded audio..."):
-            try:
-                # Load audio file
-                audio_bytes = uploaded_audio.read()
-                audio = AudioSegment.from_file(io.BytesIO(audio_bytes))
-
-                # Convert to .wav if not already
-                if uploaded_audio.type != 'audio/wav':
-                    audio = audio.set_channels(1).set_frame_rate(16000)
-                    wav_buffer = io.BytesIO()
-                    audio.export(wav_buffer, format="wav")
-                    wav_buffer.seek(0)
-                    audio_file = wav_buffer
-                else:
-                    audio_file = io.BytesIO(audio_bytes)
-
-                # Recognize speech from the audio file using SpeechRecognition
-                with sr.AudioFile(audio_file) as source:
-                    recognizer = sr.Recognizer()
-                    audio_data = recognizer.record(source)
-                    user_text = recognizer.recognize_google(audio_data)
-                    st.write(f"**Transcribed Text:** {user_text}")
-
-                    # Perform emotion analysis and sentiment detection
-                    emotion, probabilities = analyze_emotion_with_probs(user_text)
-                    sentiment = get_sentiment(user_text)
-                    # Display results
-                    display_results(user_text, emotion, probabilities, sentiment)
-
-            except Exception as e:
-                st.error(f"Error processing the audio file: {e}")
