@@ -1,5 +1,4 @@
 import streamlit as st
-import speech_recognition as sr
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 from textblob import TextBlob
@@ -7,7 +6,7 @@ from pydub import AudioSegment
 import io
 import pandas as pd
 import plotly.express as px
-import re
+import speech_recognition as sr
 
 # Load pre-trained model and tokenizer
 MODEL_NAME = "bsingh/roberta_goEmotion"
@@ -23,7 +22,6 @@ emotion_labels = [
     "relief", "remorse", "sadness", "surprise", "neutral"
 ]
 
-
 # Function to analyze emotion with probabilities
 def analyze_emotion_with_probs(user_text):
     inputs = tokenizer(user_text, return_tensors="pt", truncation=True, max_length=512)
@@ -32,23 +30,17 @@ def analyze_emotion_with_probs(user_text):
     max_prob_idx = probabilities.index(max(probabilities))
     return emotion_labels[max_prob_idx], probabilities
 
-
 # Function to determine sentiment
 def get_sentiment(text):
     blob = TextBlob(text)
     sentiment = blob.sentiment.polarity
     return "Positive" if sentiment > 0 else "Negative" if sentiment < 0 else "Neutral"
 
-
-# Initialize recognizer for voice input
-recognizer = sr.Recognizer()
-
 # Streamlit UI setup
 st.set_page_config(page_title="Emotion Detection", layout="wide")
 
 # Sidebar menu
 page = st.sidebar.selectbox("Select Task", ["Text Analysis", "Voice Analysis"])
-
 
 # Function to display results with an interactive chart
 def display_results(user_input, emotion, probabilities, sentiment):
@@ -70,7 +62,6 @@ def display_results(user_input, emotion, probabilities, sentiment):
                  title="Emotion Probabilities",
                  labels={"Probability": "Confidence Score"})
     st.plotly_chart(fig, use_container_width=True)
-
 
 # Task 1: Text Analysis
 if page == "Text Analysis":
@@ -103,30 +94,7 @@ if page == "Text Analysis":
 elif page == "Voice Analysis":
     st.title("Voice Emotion Analysis")
 
-    # Option 1: Microphone Input
-    if st.button("Start Recording"):
-        with st.spinner("Listening..."):
-            try:
-                # Use the microphone to capture audio
-                with sr.Microphone() as source:
-                    recognizer.adjust_for_ambient_noise(source)
-                    audio = recognizer.listen(source)
-                    # Recognize the speech using Google's speech-to-text API
-                    user_text = recognizer.recognize_google(audio)
-                    st.write(f"**Transcribed Text:** {user_text}")
-
-                    # Perform emotion analysis and sentiment detection
-                    emotion, probabilities = analyze_emotion_with_probs(user_text)
-                    sentiment = get_sentiment(user_text)
-                    # Display results
-                    display_results(user_text, emotion, probabilities, sentiment)
-
-            except sr.UnknownValueError:
-                st.error("Sorry, I couldn't understand the audio.")
-            except sr.RequestError as e:
-                st.error(f"Error with speech recognition service: {e}")
-
-    # Option 2: Audio File Upload
+    # Option: Audio File Upload
     uploaded_audio = st.file_uploader("Upload an audio file (e.g., .wav, .mp3)", type=["wav", "mp3"])
     if uploaded_audio:
         with st.spinner("Processing the uploaded audio..."):
@@ -147,6 +115,7 @@ elif page == "Voice Analysis":
 
                 # Recognize speech from the audio file using SpeechRecognition
                 with sr.AudioFile(audio_file) as source:
+                    recognizer = sr.Recognizer()
                     audio_data = recognizer.record(source)
                     user_text = recognizer.recognize_google(audio_data)
                     st.write(f"**Transcribed Text:** {user_text}")
