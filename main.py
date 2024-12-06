@@ -60,7 +60,6 @@ def display_results(user_input, emotion, probabilities, sentiment):
     st.plotly_chart(fig, use_container_width=True)
 
 # Text Analysis Section
-st.header("Text Analysis")
 user_input = st.text_area("Enter text here:")
 
 uploaded_text_file = st.file_uploader("Upload a text file for analysis", type=["txt"])
