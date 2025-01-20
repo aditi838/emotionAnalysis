@@ -1,9 +1,8 @@
 # Emotion and Sentiment Analysis Project
-This project analyzes text and voice inputs to detect emotions and sentiments.
+This project analyzes text inputs to detect emotions and sentiments.
 
 ## Features
 - Text Analysis
-- Voice Analysis
 - Interactive Visualizations
 
 ## How to Run
