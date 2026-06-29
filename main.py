@@ -1,144 +1,312 @@
 import streamlit as st
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
-from textblob import TextBlob
 import pandas as pd
 import plotly.express as px
 
-# ── Constants ────────────────────────────────────────────────
-MODEL_NAME = "j-hartmann/emotion-english-distilroberta-base"
+# ─────────────────────────────────────────────────────────────
+# Models
+# ─────────────────────────────────────────────────────────────
 
-EMOTION_LABELS = [
-    "anger", "disgust", "fear", "joy", "neutral", "sadness", "surprise"
-]
-
-EMOTION_EMOJI = {
-    "anger":    "😡",
-    "disgust":  "🤢",
-    "fear":     "😱",
-    "joy":      "😊",
-    "neutral":  "😐",
-    "sadness":  "😢",
-    "surprise": "😲",
-}
-
-SENTIMENT_EMOJI = {"Positive": "😄", "Negative": "☹️", "Neutral": "😐"}
+EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
+SENTIMENT_MODEL = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
 MAX_TOKENS = 512
 
+EMOTION_EMOJI = {
+    "anger": "😡",
+    "disgust": "🤢",
+    "fear": "😱",
+    "joy": "😊",
+    "neutral": "😐",
+    "sadness": "😢",
+    "surprise": "😲",
+}
 
-# ── Model loading (cached — loads once, reused across all reruns) ──
+SENTIMENT_EMOJI = {
+    "Positive": "😄",
+    "Negative": "☹️",
+    "Neutral": "😐",
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# Load models
+# ─────────────────────────────────────────────────────────────
+
 @st.cache_resource
-def load_model():
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
-    model.eval()
-    return tokenizer, model
+def load_models():
+
+    # Emotion model
+    emotion_tokenizer = AutoTokenizer.from_pretrained(EMOTION_MODEL)
+    emotion_model = AutoModelForSequenceClassification.from_pretrained(
+        EMOTION_MODEL
+    )
+    emotion_model.eval()
+
+    emotion_labels = [
+        emotion_model.config.id2label[i].lower()
+        for i in range(emotion_model.config.num_labels)
+    ]
+
+    # Sentiment model
+    sentiment_tokenizer = AutoTokenizer.from_pretrained(SENTIMENT_MODEL)
+    sentiment_model = AutoModelForSequenceClassification.from_pretrained(
+        SENTIMENT_MODEL
+    )
+    sentiment_model.eval()
+
+    return (
+        emotion_tokenizer,
+        emotion_model,
+        emotion_labels,
+        sentiment_tokenizer,
+        sentiment_model,
+    )
 
 
-# ── Analysis functions ───────────────────────────────────────
-def analyze_emotion(text: str, tokenizer, model):
-    """Returns (top_emotion, probabilities_list)."""
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=MAX_TOKENS)
+# ─────────────────────────────────────────────────────────────
+# Emotion analysis
+# ─────────────────────────────────────────────────────────────
+
+def analyze_emotion(text, tokenizer, model, labels):
+
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=MAX_TOKENS,
+    )
+
     with torch.no_grad():
         outputs = model(**inputs)
-    probabilities = torch.nn.functional.softmax(outputs.logits, dim=1).tolist()[0]
-    top_idx = probabilities.index(max(probabilities))
-    return EMOTION_LABELS[top_idx], probabilities
+
+    probabilities = torch.softmax(outputs.logits, dim=1)[0].tolist()
+
+    top_idx = torch.argmax(outputs.logits, dim=1).item()
+
+    return labels[top_idx], probabilities
 
 
-def get_sentiment(text: str) -> str:
-    polarity = TextBlob(text).sentiment.polarity
-    return "Positive" if polarity > 0 else "Negative" if polarity < 0 else "Neutral"
+# ─────────────────────────────────────────────────────────────
+# Sentiment analysis
+# ─────────────────────────────────────────────────────────────
+
+def get_sentiment(text, tokenizer, model):
+
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512,
+    )
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    prediction = torch.argmax(outputs.logits, dim=1).item()
+
+    label = model.config.id2label[prediction].lower()
+
+    if "negative" in label:
+        return "Negative"
+
+    elif "neutral" in label:
+        return "Neutral"
+
+    else:
+        return "Positive"
 
 
-def estimate_tokens(text: str) -> int:
-    """Rough token estimate — actual tokenisation may differ slightly."""
+# ─────────────────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────────────────
+
+def estimate_tokens(text):
     return len(text.split())
 
 
-# ── Display function ─────────────────────────────────────────
-def display_results(emotion: str, probabilities: list, sentiment: str):
+# ─────────────────────────────────────────────────────────────
+# Display
+# ─────────────────────────────────────────────────────────────
+
+def display_results(emotion, probabilities, sentiment, labels):
+
     col1, col2 = st.columns(2)
+
     with col1:
         st.metric(
-            label="Detected Emotion",
-            value=f"{emotion.capitalize()} {EMOTION_EMOJI.get(emotion, '')}"
+            "Detected Emotion",
+            f"{emotion.capitalize()} {EMOTION_EMOJI.get(emotion,'')}",
         )
+
     with col2:
         st.metric(
-            label="Sentiment",
-            value=f"{sentiment} {SENTIMENT_EMOJI[sentiment]}"
+            "Sentiment",
+            f"{sentiment} {SENTIMENT_EMOJI[sentiment]}",
         )
 
-    emotion_data = pd.DataFrame({
-        "Emotion":     [e.capitalize() for e in EMOTION_LABELS],
-        "Probability": probabilities
-    }).sort_values("Probability", ascending=False)
+    emotion_df = pd.DataFrame(
+        {
+            "Emotion": [x.capitalize() for x in labels],
+            "Probability": probabilities,
+        }
+    )
+
+    emotion_df = emotion_df.sort_values(
+        by="Probability",
+        ascending=False,
+    )
 
     fig = px.bar(
-        emotion_data,
+        emotion_df,
         x="Emotion",
         y="Probability",
         title="Emotion Confidence Scores",
-        labels={"Probability": "Confidence Score"},
         color="Probability",
         color_continuous_scale="Blues",
+        labels={"Probability": "Confidence Score"},
     )
-    fig.update_layout(xaxis_tickangle=0, coloraxis_showscale=False)
+
+    fig.update_layout(
+        coloraxis_showscale=False,
+        xaxis_tickangle=0,
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
 
-# ── App ──────────────────────────────────────────────────────
-st.set_page_config(page_title="Emotion & Sentiment Analysis", layout="wide")
+# ─────────────────────────────────────────────────────────────
+# App
+# ─────────────────────────────────────────────────────────────
+
+st.set_page_config(
+    page_title="Emotion & Sentiment Analysis",
+    layout="wide",
+)
+
 st.title("🧠 Emotion and Sentiment Analysis")
-st.caption("Powered by DistilRoBERTa fine-tuned across 6 datasets · 7 emotion classes")
 
-tokenizer, model = load_model()
+st.caption(
+    "Powered by DistilRoBERTa (Emotion) + CardiffNLP RoBERTa (Sentiment)"
+)
 
-tab1, tab2 = st.tabs(["✍️ Enter Text", "📄 Upload File"])
+(
+    emotion_tokenizer,
+    emotion_model,
+    EMOTION_LABELS,
+    sentiment_tokenizer,
+    sentiment_model,
+) = load_models()
 
-# ── Tab 1: Text input ────────────────────────────────────────
+tab1, tab2 = st.tabs(
+    [
+        "✍️ Enter Text",
+        "📄 Upload File",
+    ]
+)
+
+# ============================================================
+# Text input
+# ============================================================
+
 with tab1:
-    user_input = st.text_area("Enter text to analyse:", height=150)
+
+    user_input = st.text_area(
+        "Enter text to analyse:",
+        height=150,
+    )
 
     if user_input.strip():
+
         token_estimate = estimate_tokens(user_input)
+
         if token_estimate > MAX_TOKENS:
+
             st.warning(
                 f"Your text is approximately {token_estimate} words. "
-                f"The model processes up to {MAX_TOKENS} tokens — longer text will be truncated."
+                f"The model processes up to {MAX_TOKENS} tokens, "
+                "so longer text will be truncated."
             )
 
-    if st.button("Analyse", key="btn_text"):
-        text = user_input.strip()
-        if text:
+    if st.button("Analyse", key="text"):
+
+        if user_input.strip():
+
             with st.spinner("Analysing..."):
-                emotion, probs = analyze_emotion(text, tokenizer, model)
-                sentiment = get_sentiment(text)
-            display_results(emotion, probs, sentiment)
+
+                emotion, probs = analyze_emotion(
+                    user_input,
+                    emotion_tokenizer,
+                    emotion_model,
+                    EMOTION_LABELS,
+                )
+
+                sentiment = get_sentiment(
+                    user_input,
+                    sentiment_tokenizer,
+                    sentiment_model,
+                )
+
+            display_results(
+                emotion,
+                probs,
+                sentiment,
+                EMOTION_LABELS,
+            )
+
         else:
             st.warning("Please enter some text.")
 
-# ── Tab 2: File upload ───────────────────────────────────────
+
+# ============================================================
+# File Upload
+# ============================================================
+
 with tab2:
-    uploaded_file = st.file_uploader("Upload a .txt file", type=["txt"])
+
+    uploaded_file = st.file_uploader(
+        "Upload a .txt file",
+        type=["txt"],
+    )
 
     if uploaded_file is not None:
+
         file_content = uploaded_file.read().decode("utf-8")
 
         with st.expander("View file content"):
             st.write(file_content)
 
         token_estimate = estimate_tokens(file_content)
+
         if token_estimate > MAX_TOKENS:
+
             st.warning(
                 f"File is approximately {token_estimate} words. "
-                f"The model processes up to {MAX_TOKENS} tokens — text will be truncated."
+                f"The model processes up to {MAX_TOKENS} tokens, "
+                "so longer text will be truncated."
             )
 
-        if st.button("Analyse File", key="btn_file"):
+        if st.button("Analyse File", key="file"):
+
             with st.spinner("Analysing..."):
-                emotion, probs = analyze_emotion(file_content, tokenizer, model)
-                sentiment = get_sentiment(file_content)
-            display_results(emotion, probs, sentiment)
+
+                emotion, probs = analyze_emotion(
+                    file_content,
+                    emotion_tokenizer,
+                    emotion_model,
+                    EMOTION_LABELS,
+                )
+
+                sentiment = get_sentiment(
+                    file_content,
+                    sentiment_tokenizer,
+                    sentiment_model,
+                )
+
+            display_results(
+                emotion,
+                probs,
+                sentiment,
+                EMOTION_LABELS,
+            )
