@@ -6,20 +6,20 @@ import pandas as pd
 import plotly.express as px
 
 # ── Constants ────────────────────────────────────────────────
-MODEL_NAME = "bsingh/roberta_goEmotion"
+MODEL_NAME = "j-hartmann/emotion-english-distilroberta-base"
 
 EMOTION_LABELS = [
-    "admiration", "amusement", "anger", "annoyance", "approval", "caring",
-    "confusion", "curiosity", "desire", "disappointment", "disapproval",
-    "disgust", "embarrassment", "excitement", "fear", "gratitude",
-    "grief", "joy", "love", "nervousness", "optimism", "pride", "realization",
-    "relief", "remorse", "sadness", "surprise", "neutral"
+    "anger", "disgust", "fear", "joy", "neutral", "sadness", "surprise"
 ]
 
 EMOTION_EMOJI = {
-    "joy": "😊", "anger": "😡", "fear": "😱", "neutral": "😐",
-    "sadness": "😢", "love": "❤️", "excitement": "🤩", "gratitude": "🙏",
-    "disgust": "🤢", "surprise": "😲", "optimism": "✨", "grief": "😭"
+    "anger":    "😡",
+    "disgust":  "🤢",
+    "fear":     "😱",
+    "joy":      "😊",
+    "neutral":  "😐",
+    "sadness":  "😢",
+    "surprise": "😲",
 }
 
 SENTIMENT_EMOJI = {"Positive": "😄", "Negative": "☹️", "Neutral": "😐"}
@@ -72,7 +72,7 @@ def display_results(emotion: str, probabilities: list, sentiment: str):
         )
 
     emotion_data = pd.DataFrame({
-        "Emotion": EMOTION_LABELS,
+        "Emotion":     [e.capitalize() for e in EMOTION_LABELS],
         "Probability": probabilities
     }).sort_values("Probability", ascending=False)
 
@@ -83,16 +83,16 @@ def display_results(emotion: str, probabilities: list, sentiment: str):
         title="Emotion Confidence Scores",
         labels={"Probability": "Confidence Score"},
         color="Probability",
-        color_continuous_scale="Blues"
+        color_continuous_scale="Blues",
     )
-    fig.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False)
+    fig.update_layout(xaxis_tickangle=0, coloraxis_showscale=False)
     st.plotly_chart(fig, use_container_width=True)
 
 
 # ── App ──────────────────────────────────────────────────────
 st.set_page_config(page_title="Emotion & Sentiment Analysis", layout="wide")
 st.title("🧠 Emotion and Sentiment Analysis")
-st.caption("Powered by RoBERTa fine-tuned on GoEmotions · 28 emotion classes")
+st.caption("Powered by DistilRoBERTa fine-tuned across 6 datasets · 7 emotion classes")
 
 tokenizer, model = load_model()
 
@@ -107,7 +107,7 @@ with tab1:
         if token_estimate > MAX_TOKENS:
             st.warning(
                 f"Your text is approximately {token_estimate} words. "
-                f"RoBERTa processes up to {MAX_TOKENS} tokens — longer text will be truncated."
+                f"The model processes up to {MAX_TOKENS} tokens — longer text will be truncated."
             )
 
     if st.button("Analyse", key="btn_text"):
@@ -134,7 +134,7 @@ with tab2:
         if token_estimate > MAX_TOKENS:
             st.warning(
                 f"File is approximately {token_estimate} words. "
-                f"RoBERTa processes up to {MAX_TOKENS} tokens — text will be truncated."
+                f"The model processes up to {MAX_TOKENS} tokens — text will be truncated."
             )
 
         if st.button("Analyse File", key="btn_file"):
