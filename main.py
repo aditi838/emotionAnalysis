@@ -38,27 +38,12 @@ def load_model():
 
 # ── Analysis functions ───────────────────────────────────────
 def analyze_emotion(text: str, tokenizer, model):
-    inputs = tokenizer(
-        text,
-        return_tensors="pt",
-        truncation=True,
-        max_length=MAX_TOKENS
-    )
-
+    """Returns (top_emotion, probabilities_list)."""
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=MAX_TOKENS)
     with torch.no_grad():
         outputs = model(**inputs)
-
-    probs = torch.softmax(outputs.logits, dim=1)
-
-    st.write("Logits shape:", outputs.logits.shape)
-    st.write("Probabilities:", probs)
-    st.write("Probabilities list:", probs.tolist())
-    st.write("Length:", len(probs.tolist()[0]))
-
-    probabilities = probs.tolist()[0]
-
-    top_idx = torch.argmax(probs, dim=1).item()
-
+    probabilities = torch.nn.functional.softmax(outputs.logits, dim=1).tolist()[0]
+    top_idx = probabilities.index(max(probabilities))
     return EMOTION_LABELS[top_idx], probabilities
 
 
